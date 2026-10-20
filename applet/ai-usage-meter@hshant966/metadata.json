@@ -1,0 +1,10 @@
+{
+    "uuid": "ai-usage-meter@hshant966",
+    "name": "AI Usage Meter",
+    "version": "1.0.0",
+    "description": "Omarchy-style usage meter for Claude Code, Codex, Hermes and Antigravity: tokens today, 5-hour and weekly limits, reset countdowns",
+    "icon": "utilities-system-monitor",
+    "max-instances": 1,
+    "author": "hshant966",
+    "website": "https://github.com/hshant966/ai-usage-meter"
+}

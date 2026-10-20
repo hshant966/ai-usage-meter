@@ -1,0 +1,118 @@
+#!/usr/bin/python3
+"""Print the Hermes usage record (Omarchy schemaVersion 1) as JSON.
+
+Source: ~/.hermes/state.db, opened read-only.
+Attribution note: messages.token_count is NOT per-API-call usage, so totals
+come from session_model_usage. Each row is split across local days in
+proportion to that session's message count per day (messages.timestamp); rows
+whose session has no timestamped messages fall back to the last_seen date.
+`--check` additionally prints the 30-day total windowed by sessions.started_at,
+which is how `hermes insights --days 30` windows (matches it within ~0.1%).
+"""
+import json
+import os
+import sqlite3
+import sys
+from pathlib import Path
+from datetime import datetime, timedelta
+
+DB = os.path.expanduser("~/.hermes/state.db")
+TOK = ("input_tokens + output_tokens + cache_read_tokens"
+       " + cache_write_tokens + reasoning_tokens")
+
+
+def day(ts):
+    return datetime.fromtimestamp(ts).strftime("%Y-%m-%d")
+
+
+def midnight(d):
+    return datetime(d.year, d.month, d.day).timestamp()
+
+
+def main():
+    now = datetime.now()
+    today = now.date()
+    start = midnight(today - timedelta(days=6))
+    rec = {
+        "schemaVersion": 1, "id": "hermes", "name": "Hermes",
+        "updatedAt": now.astimezone().isoformat(timespec="seconds"),
+        "ready": False, "tierLabel": "", "limits": [], "limitsStale": False,
+        "usageStatusText": "", "authHelpText": "", "hasLocalStats": False,
+        "todayTotalTokens": 0, "todayPrompts": 0, "todaySessions": 0,
+        "todayTokensByModel": {},
+        "recentDays": [{"date": str(today - timedelta(days=i)), "messageCount": 0}
+                       for i in range(6, -1, -1)],
+        "totalPrompts": 0, "totalSessions": 0, "activeDays": 0,
+    }
+    if not os.path.exists(DB):
+        rec["usageStatusText"] = "Hermes state.db not found"
+        print(json.dumps(rec))
+        return
+    con = sqlite3.connect(Path(DB).as_uri() + "?mode=ro", uri=True, timeout=5)
+    try:
+        rows = con.execute(
+            "SELECT session_id, model, billing_provider, last_seen, api_call_count,"
+            " %s, estimated_cost_usd, actual_cost_usd FROM session_model_usage"
+            " WHERE last_seen IS NOT NULL" % TOK).fetchall()
+        mc = {}
+        for sid, ts in con.execute("SELECT session_id, timestamp FROM messages"
+                                   " WHERE timestamp >= ?", (start - 86400 * 400,)):
+            dd = mc.setdefault(sid, {})
+            k = day(ts)
+            dd[k] = dd.get(k, 0) + 1
+        total_sessions = con.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
+        check = None
+        if "--check" in sys.argv:
+            utok = " + ".join("u." + c.strip() for c in TOK.split("+"))
+            check = con.execute(
+                "SELECT COALESCE(SUM(%s),0) FROM session_model_usage u JOIN sessions s"
+                " ON s.id=u.session_id WHERE s.started_at > ?" % utok,
+                (now.timestamp() - 30 * 86400,)
+            ).fetchone()[0]
+    finally:
+        con.close()
+
+    by_day = {r["date"]: r for r in rec["recentDays"]}
+    today_s = str(today)
+    sessions_today, cost = set(), 0.0
+    by_model, active, prompts = {}, set(), 0
+    prov_tokens = {}
+    for sid, model, prov, last, calls, tok, est, act in rows:
+        days = mc.get(sid) or {day(last): 1}
+        n = sum(days.values())
+        for d, c in days.items():
+            share = c / n
+            active.add(d)
+            if d in by_day:
+                by_day[d]["messageCount"] += round(tok * share)
+            if d == today_s:
+                rec["todayTotalTokens"] += round(tok * share)
+                by_model[model] = by_model.get(model, 0) + round(tok * share)
+                sessions_today.add(sid)
+                prompts += round((calls or 0) * share)
+                cost += (act or est or 0.0) * share
+        if last >= start:
+            prov_tokens[model] = prov_tokens.get(model, 0) + tok
+    rec["todayTokensByModel"] = by_model
+    rec["todayPrompts"] = prompts
+    rec["todaySessions"] = len(sessions_today)
+    rec["totalSessions"] = total_sessions
+    rec["totalPrompts"] = sum(r[4] or 0 for r in rows)
+    rec["activeDays"] = len(active)
+    if cost > 0:
+        rec["todayCostUSD"] = round(cost, 4)
+    if prov_tokens:  # main billing model over the last 7 days
+        rec["tierLabel"] = max(prov_tokens, key=prov_tokens.get).split("/")[-1]
+    rec["ready"] = True
+    rec["hasLocalStats"] = True
+    if check is not None:
+        rec["check30dTokensByStartedAt"] = check
+    print(json.dumps(rec))
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as exc:  # collector contract: never crash silently
+        print("ai-usage-hermes: %s" % exc, file=sys.stderr)
+        sys.exit(1)

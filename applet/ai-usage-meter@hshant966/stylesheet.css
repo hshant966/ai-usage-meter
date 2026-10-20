@@ -1,0 +1,198 @@
+/* Popup colors are translucent grays over the theme so dark and light Cinnamon themes both work. */
+
+.aiusage-panel-gauge {
+    margin-left: 2px;
+    margin-right: 2px;
+}
+
+.aiusage-item {
+    padding: 3px 12px;
+}
+
+.aiusage-header {
+    min-width: 340px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid rgba(128, 128, 128, 0.25);
+}
+
+.aiusage-caps {
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.aiusage-total {
+    font-size: 28px;
+    font-weight: bold;
+}
+
+.aiusage-hero-unit {
+    font-size: 12px;
+    padding-top: 15px;
+}
+
+.aiusage-secondary {
+    color: #a0a0a0;
+    font-size: 11px;
+}
+
+.aiusage-caption {
+    font-size: 10px;
+}
+
+.aiusage-warn {
+    color: #ffb020;
+}
+
+.aiusage-crit {
+    color: #ff4d4f;
+}
+
+.aiusage-card {
+    min-width: 340px;
+    padding: 7px 12px 7px 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(128, 128, 128, 0.18);
+    border-left-width: 3px;
+    background-color: rgba(128, 128, 128, 0.10);
+    spacing: 4px;
+}
+
+.aiusage-card-title {
+    font-size: 13px;
+    font-weight: bold;
+}
+
+.aiusage-chip {
+    margin-left: 6px;
+    padding: 1px 7px;
+    border-radius: 8px;
+    font-size: 10px;
+    background-color: rgba(128, 128, 128, 0.22);
+}
+
+.aiusage-chip-panel {
+    font-weight: bold;
+}
+
+.aiusage-limit {
+    spacing: 2px;
+}
+
+.aiusage-limit-name {
+    padding-top: 8px;
+}
+
+.aiusage-pct {
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.aiusage-pct-unit {
+    padding-top: 10px;
+    padding-left: 2px;
+}
+
+.aiusage-countdown {
+    font-size: 15px;
+    font-weight: bold;
+}
+
+.aiusage-countdown-unit {
+    padding-top: 4px;
+}
+
+.aiusage-tokens {
+    font-size: 11px;
+}
+
+.aiusage-status {
+    font-size: 11px;
+}
+
+.aiusage-footer {
+    spacing: 6px;
+}
+
+.aiusage-footer-time {
+    padding-top: 6px;
+}
+
+.aiusage-footer-btn,
+.aiusage-option-btn,
+.aiusage-btn,
+.aiusage-seg-btn,
+.aiusage-mini-btn {
+    padding: 5px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    background-color: rgba(128, 128, 128, 0.15);
+}
+
+.aiusage-btn,
+.aiusage-seg-btn {
+    font-size: 11px;
+}
+
+.aiusage-mini-btn {
+    margin-left: 6px;
+    padding: 2px 8px;
+    font-size: 10px;
+}
+
+.aiusage-footer-btn:hover,
+.aiusage-option-btn:hover,
+.aiusage-btn:hover,
+.aiusage-seg-btn:hover,
+.aiusage-mini-btn:hover {
+    background-color: rgba(128, 128, 128, 0.28);
+}
+
+.aiusage-btn-row {
+    spacing: 6px;
+}
+
+.aiusage-seg {
+    spacing: 2px;
+}
+
+.aiusage-btn-active,
+.aiusage-btn-active:hover {
+    color: #0b1f14;
+    font-weight: bold;
+    background-color: rgba(61, 220, 132, 0.9);
+}
+
+.aiusage-provider-row {
+    spacing: 6px;
+}
+
+.aiusage-dot {
+    font-size: 10px;
+    padding-top: 2px;
+}
+
+.aiusage-provider-name {
+    font-size: 12px;
+    padding-top: 1px;
+}
+
+.aiusage-customize {
+    font-weight: bold;
+}
+
+.aiusage-option-btn {
+    font-size: 11px;
+    padding: 4px 6px;
+}
+
+.aiusage-options {
+    padding-left: 8px;
+}
+
+.aiusage-picker {
+    font-weight: bold;
+}
+
+.aiusage-dropdown {
+    padding: 4px 0;
+}

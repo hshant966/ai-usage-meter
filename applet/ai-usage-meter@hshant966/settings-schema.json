@@ -1,0 +1,89 @@
+{
+    "layout": {
+        "type": "layout",
+        "pages": [
+            "general"
+        ],
+        "general": {
+            "type": "page",
+            "title": "General",
+            "sections": [
+                "command"
+            ]
+        },
+        "command": {
+            "type": "section",
+            "title": "AI Usage",
+            "keys": [
+                "update-command",
+                "gauge-provider",
+                "refresh-interval",
+                "cycle-seconds",
+                "auto-cycle"
+            ]
+        }
+    },
+    "gauge-provider": {
+        "type": "combobox",
+        "default": "claude",
+        "description": "Provider driving the panel arc",
+        "options": {
+            "Claude": "claude",
+            "Hermes": "hermes",
+            "Codex": "codex",
+            "Antigravity": "antigravity"
+        }
+    },
+    "refresh-interval": {
+        "type": "spinbutton",
+        "default": 300,
+        "min": 60,
+        "max": 3600,
+        "step": 30,
+        "units": "seconds",
+        "description": "Refresh interval"
+    },
+    "update-command": {
+        "type": "entry",
+        "default": "~/.local/share/ai-usage/bin/ai-usage-update",
+        "description": "Update command"
+    },
+    "cycle-seconds": {
+        "type": "spinbutton",
+        "default": 5,
+        "min": 0,
+        "max": 60,
+        "step": 1,
+        "units": "seconds",
+        "description": "Shuffle interval"
+    },
+    "auto-cycle": {
+        "type": "switch",
+        "default": false,
+        "description": "Auto shuffle panel views"
+    },
+    "panel-view": {
+        "type": "generic",
+        "default": "5h-reset"
+    },
+    "slot-left": {
+        "type": "generic",
+        "default": "today"
+    },
+    "slot-right": {
+        "type": "generic",
+        "default": "week"
+    },
+    "design": {
+        "type": "generic",
+        "default": "arc"
+    },
+    "design-shuffle": {
+        "type": "generic",
+        "default": false
+    },
+    "hidden-providers": {
+        "type": "generic",
+        "default": []
+    }
+}

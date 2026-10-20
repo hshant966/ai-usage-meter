@@ -1,0 +1,273 @@
+<title>AI Usage Meter Guide</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Figtree:wght@400;500;600&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: one reading column; a live panel simulator up top, then reference sections. */
+:root {
+  --bg: #f5f6f3; --surface: #ffffff; --ink: #1c211e; --muted: #5d665f; --line: #dfe3dc;
+  --panel: #23272a; --panel-ink: #f2f4f3; --accent: #1f9d5c;
+  --ok: #3ddc84; --warn: #ffb020; --crit: #ff4d4f; --clay: #d97757;
+  --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --body: "Figtree", "Segoe UI", system-ui, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, "DejaVu Sans Mono", monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #121513; --surface: #1a1e1c; --ink: #e8ece9; --muted: #9aa49d; --line: #2a302c;
+  --panel: #0b0d0c; --panel-ink: #f2f4f3; --accent: #3ddc84; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #121513; --surface: #1a1e1c; --ink: #e8ece9; --muted: #9aa49d; --line: #2a302c;
+  --panel: #0b0d0c; --panel-ink: #f2f4f3; --accent: #3ddc84; color-scheme: dark }
+body { background: var(--bg); color: var(--ink); font: 16px/1.6 var(--body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 32px 64px; }
+main { max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; gap: 48px; }
+h1, h2, h3 { font-family: var(--display); line-height: 1.15; text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(2rem, 6vw, 3rem); font-weight: 800; letter-spacing: -0.02em; }
+h2 { font-size: 1.5rem; font-weight: 800; margin-bottom: 12px; }
+h3 { font-size: 1.05rem; font-weight: 600; }
+p { margin: 0; max-width: 65ch; }
+.lede { color: var(--muted); font-size: 1.1rem; margin-top: 10px; }
+.eyebrow { font: 700 0.72rem/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); margin-bottom: 10px; }
+code, kbd { font-family: var(--mono); font-size: 0.86em; background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 1px 6px; }
+
+/* Simulator */
+.sim { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 20px; display: grid; gap: 18px; }
+.panelbar { background: var(--panel); border-radius: 10px; padding: 18px 16px; display: flex; justify-content: center; align-items: center; gap: 16px; overflow-x: auto; }
+.panelbar canvas { display: block; }
+.readout { color: var(--panel-ink); font: 500 0.8rem/1.4 var(--mono); opacity: 0.75; min-width: 0; }
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 16px 24px; }
+.control { display: grid; gap: 6px; min-width: 0; }
+.control label { font-weight: 600; font-size: 0.92rem; display: flex; justify-content: space-between; gap: 8px; }
+.control output { font-family: var(--mono); color: var(--muted); font-weight: 500; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.seg { display: flex; gap: 6px; flex-wrap: wrap; }
+.seg button { font: 600 0.88rem var(--body); padding: 6px 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #0b1f14; }
+.seg button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.verdict { border-left: 4px solid var(--ok); padding: 10px 14px; background: var(--bg); border-radius: 0 8px 8px 0; font-size: 0.95rem; }
+
+/* Views table */
+.views { display: grid; gap: 10px; }
+.view { display: grid; grid-template-columns: 112px 1fr; gap: 16px; align-items: start; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.view:last-child { border-bottom: 0; }
+.chip { font: 700 0.78rem/1 var(--mono); letter-spacing: 0.06em; background: var(--panel); color: var(--panel-ink); padding: 8px 10px; border-radius: 6px; text-align: center; }
+.chip small { display: block; font-size: 0.62rem; opacity: 0.6; margin-bottom: 4px; letter-spacing: 0.1em; }
+.view p { color: var(--muted); }
+.view p strong { color: var(--ink); }
+
+/* Lists */
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 6px; min-width: 0; }
+.card p { color: var(--muted); font-size: 0.95rem; }
+.swatch { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 1px; }
+.tips { display: grid; gap: 12px; counter-reset: tip; padding: 0; margin: 0; list-style: none; }
+.tips li { display: grid; grid-template-columns: 36px 1fr; gap: 12px; align-items: start; }
+.tips li::before { counter-increment: tip; content: counter(tip); font: 800 1.1rem/36px var(--display); text-align: center; background: var(--surface); border: 1px solid var(--line); border-radius: 50%; width: 36px; height: 36px; }
+.tips p { color: var(--muted); }
+.tips strong { color: var(--ink); }
+@media (max-width: 480px) { .view { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">Cinnamon panel · Claude Code limits</div>
+    <h1>Read your AI meter at a glance</h1>
+    <p class="lede">What every number on the AI Usage Meter means, why PACE matters most, and how to make your Claude limits last. Move the sliders to see the meter react.</p>
+  </header>
+
+  <section aria-labelledby="sim-h">
+    <div class="eyebrow">Try it</div>
+    <h2 id="sim-h">Live meter simulator</h2>
+    <div class="sim">
+      <div class="panelbar"><canvas id="meter" width="268" height="48" aria-label="Simulated panel meter"></canvas></div>
+      <div class="controls">
+        <div class="control">
+          <label for="used">5-hour limit used <output id="usedOut">34%</output></label>
+          <input id="used" type="range" min="0" max="100" value="34">
+        </div>
+        <div class="control">
+          <label for="elapsed">Time into the 5-hour window <output id="elapsedOut">1h 30m</output></label>
+          <input id="elapsed" type="range" min="0" max="300" step="5" value="90">
+        </div>
+        <div class="control">
+          <label for="week">Weekly limit used <output id="weekOut">17%</output></label>
+          <input id="week" type="range" min="0" max="100" value="17">
+        </div>
+        <div class="control">
+          <label id="design-l">Design</label>
+          <div class="seg" role="group" aria-labelledby="design-l">
+            <button type="button" data-design="arc" aria-pressed="true">Arc</button>
+            <button type="button" data-design="bars" aria-pressed="false">Bars</button>
+            <button type="button" data-design="ring" aria-pressed="false">Ring</button>
+          </div>
+        </div>
+        <div class="control">
+          <label id="mid-l">Middle slot</label>
+          <div class="seg" role="group" aria-labelledby="mid-l">
+            <button type="button" data-mid="reset" aria-pressed="true">5h reset</button>
+            <button type="button" data-mid="pct" aria-pressed="false">5h %</button>
+            <button type="button" data-mid="pace" aria-pressed="false">Pace</button>
+          </div>
+        </div>
+      </div>
+      <p class="verdict" id="verdict"></p>
+    </div>
+  </section>
+
+  <section aria-labelledby="views-h">
+    <div class="eyebrow">The six views</div>
+    <h2 id="views-h">What each label means</h2>
+    <div class="views">
+      <div class="view"><div class="chip"><small>TODAY</small>28.4M</div><p><strong>Tokens used today</strong> across every AI tool (Claude Code, Codex, Hermes). A token is a chunk of text, roughly ¾ of a word. Most of a coding session's tokens are re-read context, so this number climbs fast and is not the same as your limit.</p></div>
+      <div class="view"><div class="chip"><small>5H RESET</small>3h29</div><p><strong>Countdown to your 5-hour limit reset.</strong> Claude Code's short-term limit runs in 5-hour windows. When this hits zero, the 5H % goes back to 0.</p></div>
+      <div class="view"><div class="chip"><small>5H</small>34%</div><p><strong>How much of the current 5-hour allowance you've used.</strong> Green under 65%, orange from 65%, red from 90%.</p></div>
+      <div class="view"><div class="chip"><small>PACE</small>~113%</div><p><strong>Where 5H % will land at reset if you keep working at today's speed.</strong> It is <code>used ÷ fraction of window passed</code>. Above 100% means you will run out before the reset. It appears once 30 minutes of the window have passed.</p></div>
+      <div class="view"><div class="chip"><small>WEEK</small>17%</div><p><strong>Weekly limit used.</strong> A separate, larger allowance across all 5-hour windows in a 7-day period. Running out here blocks you until the weekly reset.</p></div>
+      <div class="view"><div class="chip"><small>WK RESET</small>29m</div><p><strong>Countdown to the weekly reset.</strong></p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="read-h">
+    <div class="eyebrow">Signals</div>
+    <h2 id="read-h">Colors and marks</h2>
+    <div class="cols">
+      <div class="card"><h3><span class="swatch" style="background:var(--ok)"></span>Green · under 65%</h3><p>Plenty left. Work normally.</p></div>
+      <div class="card"><h3><span class="swatch" style="background:var(--warn)"></span>Orange · 65–89%</h3><p>Slow down or switch to a lighter model for routine work.</p></div>
+      <div class="card"><h3><span class="swatch" style="background:var(--crit)"></span>Red, underlined · 90%+</h3><p>Nearly out. The middle slot also gets a faint red glow.</p></div>
+      <div class="card"><h3>White tick on the bar</h3><p>The even-pace point: how far through the window you are. If the colored fill is past the tick, you're burning faster than the limit allows.</p></div>
+      <div class="card"><h3>Dimmed meter</h3><p>Data is over 15 minutes old. After an hour, values show <code>--</code>. Right-click and press Refresh.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="use-h">
+    <div class="eyebrow">Controls</div>
+    <h2 id="use-h">Using the meter</h2>
+    <div class="cols">
+      <div class="card"><h3>Left-click or scroll</h3><p>Steps the middle slot to the next view.</p></div>
+      <div class="card"><h3>Right-click</h3><p>Opens the details popup: every tool's limits, countdowns and tokens.</p></div>
+      <div class="card"><h3>Customize</h3><p>In the popup footer. Pick what the left, middle and right slots show, the design, shuffle, and which AI drives the panel.</p></div>
+    </div>
+  </section>
+
+  <section aria-labelledby="tips-h">
+    <div class="eyebrow">Make limits last</div>
+    <h2 id="tips-h">Using Claude efficiently</h2>
+    <ol class="tips">
+      <li><p><strong>Watch PACE, not 5H %.</strong> 40% used in the first hour is a problem; 40% in the fourth hour is fine. PACE shows which one you are in.</p></li>
+      <li><p><strong>Start fresh between unrelated tasks.</strong> Every message re-sends the whole conversation. Use <code>/clear</code> when you switch topics, and <code>/compact</code> when a long session is still on the same task.</p></li>
+      <li><p><strong>Match the model to the job.</strong> Bigger models use your allowance faster. Use <code>/model</code> to pick a lighter one for renames, small fixes and questions, and save the largest for design and hard debugging.</p></li>
+      <li><p><strong>Be specific about files.</strong> "Fix the date bug in <code>format.js</code>" costs far less than "look through the project and find bugs", because Claude reads less.</p></li>
+      <li><p><strong>Use subagents on purpose.</strong> Each one starts with its own fresh context and can use tens of thousands of tokens. Ask for them for real parallel work, and give them a token cap.</p></li>
+      <li><p><strong>Plan heavy work after a reset.</strong> If 5H RESET says 20m and you are at 85%, wait and start the big task in the new window.</p></li>
+      <li><p><strong>Check <code>/usage</code> inside Claude Code</strong> for the official numbers. The meter reads the same source every 5 minutes.</p></li>
+    </ol>
+  </section>
+</main>
+
+<script>
+(function () {
+  var COL = { ok: [61, 220, 132], warn: [255, 176, 32], crit: [255, 77, 79] };
+  var state = { used: 34, elapsed: 90, week: 17, design: "arc", mid: "reset" };
+  var canvas = document.getElementById("meter");
+  var scale = window.devicePixelRatio || 1;
+  var W = 134, H = 24, ZOOM = 2;
+  canvas.width = W * ZOOM * scale; canvas.height = H * ZOOM * scale;
+  canvas.style.width = (W * ZOOM) + "px"; canvas.style.height = (H * ZOOM) + "px";
+  var cx = canvas.getContext("2d");
+
+  function status(p) { return p >= 90 ? COL.crit : (p >= 65 ? COL.warn : COL.ok); }
+  function rgba(c, a) { return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + (a === undefined ? 1 : a) + ")"; }
+  function pace() { var f = state.elapsed / 300; return f < 0.1 || state.used === 0 ? null : state.used / f; }
+  function hm(min) { var h = Math.floor(min / 60), m = Math.round(min % 60); return h > 0 ? h + "h" + (m < 10 ? "0" : "") + m : m + "m"; }
+
+  function text(t, x, y, size, bold, color, align) {
+    cx.font = (bold ? "700 " : "400 ") + size + "px 'DejaVu Sans', Figtree, sans-serif";
+    cx.fillStyle = color; cx.textAlign = align || "center"; cx.fillText(t, x, y);
+  }
+  function middleView() {
+    var p = pace();
+    if (state.mid === "pct") return { tag: "5H", text: state.used + "%", pct: state.used, tint: true };
+    if (state.mid === "pace") return p === null ? { tag: "PACE", text: "--", pct: 0 } : { tag: "PACE", text: "~" + Math.round(p) + "%", pct: Math.min(100, p), tint: true };
+    return { tag: "5H RESET", text: hm(300 - state.elapsed), pct: state.used };
+  }
+  function label(v, x, align) {
+    text(v.tag, x, 9, 6.5, false, "rgba(255,255,255,0.62)", align);
+    var c = v.tint ? rgba(status(v.pct)) : "rgba(255,255,255,0.95)";
+    text(v.text, x, 20.5, 10, true, c, align);
+    if (v.tint && v.pct >= 90) {
+      cx.font = "700 10px 'DejaVu Sans', sans-serif";
+      var w = cx.measureText(v.text).width, left = align === "left" ? x : x - w / 2;
+      cx.fillStyle = c; cx.fillRect(left, 22.5, w, 1);
+    }
+  }
+  function bar(x, y, w, p, tick) {
+    cx.lineCap = "round"; cx.lineWidth = 3.5;
+    cx.strokeStyle = "rgba(255,255,255,0.18)"; cx.beginPath(); cx.moveTo(x + 1.75, y + 1.75); cx.lineTo(x + w - 1.75, y + 1.75); cx.stroke();
+    if (p > 0.5) { cx.strokeStyle = rgba(status(p)); cx.beginPath(); cx.moveTo(x + 1.75, y + 1.75); cx.lineTo(x + Math.max(3.5, w * p / 100) - 1.75, y + 1.75); cx.stroke(); }
+    if (tick !== null) { cx.lineCap = "butt"; cx.lineWidth = 1.2; cx.strokeStyle = "rgba(255,255,255,0.9)"; var tx = x + w * tick; cx.beginPath(); cx.moveTo(tx, y - 1); cx.lineTo(tx, y + 4.5); cx.stroke(); }
+  }
+  function draw() {
+    cx.setTransform(ZOOM * scale, 0, 0, ZOOM * scale, 0, 0);
+    cx.clearRect(0, 0, W, H);
+    var v = middleView(), f = state.elapsed / 300, x0 = 42, mx = x0 + 25;
+    if (state.used >= 90 || state.week >= 90) { cx.fillStyle = "rgba(255,77,79,0.12)"; cx.fillRect(x0, 0, 50, H); }
+    label({ tag: "TODAY", text: "28.4M" }, 22);
+    label({ tag: "WEEK", text: state.week + "%", pct: state.week, tint: true }, 114);
+    var tickOn = state.mid !== "pace";
+    if (state.design === "arc") {
+      cx.lineCap = "round"; cx.lineWidth = 3;
+      cx.strokeStyle = "rgba(255,255,255,0.18)"; cx.beginPath(); cx.arc(mx, H - 2.5, 20, Math.PI, Math.PI * 2); cx.stroke();
+      if (v.pct > 0.5) { cx.strokeStyle = rgba(status(v.pct)); cx.beginPath(); cx.arc(mx, H - 2.5, 20, Math.PI, Math.PI + Math.PI * v.pct / 100); cx.stroke(); }
+      if (tickOn) { var a = Math.PI + Math.PI * f; cx.lineCap = "butt"; cx.lineWidth = 1.2; cx.strokeStyle = "rgba(255,255,255,0.9)"; cx.beginPath(); cx.moveTo(mx + Math.cos(a) * 16.5, H - 2.5 + Math.sin(a) * 16.5); cx.lineTo(mx + Math.cos(a) * 23.5, H - 2.5 + Math.sin(a) * 23.5); cx.stroke(); }
+      text(v.tag, mx, 11, 6.5, false, "rgba(255,255,255,0.62)");
+      var c = v.tint ? rgba(status(v.pct)) : "rgba(255,255,255,0.95)";
+      text(v.text, mx, 20.5, 10, true, c);
+    } else if (state.design === "bars") {
+      text(v.tag, x0 + 3, 10, 6.5, false, "rgba(255,255,255,0.62)", "left");
+      text(v.text, x0 + 47, 10.5, 10, true, v.tint ? rgba(status(v.pct)) : "rgba(255,255,255,0.95)", "right");
+      bar(x0 + 3, 14, 44, state.used, f);
+      bar(x0 + 3, 19.5, 44, state.week, null);
+    } else {
+      var rx = x0 + 12, ry = 12, rings = [[10, 2.8, state.used, f], [5.5, 2.4, state.week, null]];
+      rings.forEach(function (r) {
+        cx.lineCap = "round"; cx.lineWidth = r[1];
+        cx.strokeStyle = "rgba(255,255,255,0.18)"; cx.beginPath(); cx.arc(rx, ry, r[0], 0, Math.PI * 2); cx.stroke();
+        if (r[2] > 0.5) { cx.strokeStyle = rgba(status(r[2])); cx.beginPath(); cx.arc(rx, ry, r[0], -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * r[2] / 100); cx.stroke(); }
+        if (r[3] !== null) { var a2 = -Math.PI / 2 + Math.PI * 2 * r[3]; cx.lineCap = "butt"; cx.lineWidth = 1.2; cx.strokeStyle = "rgba(255,255,255,0.9)"; cx.beginPath(); cx.moveTo(rx + Math.cos(a2) * 7.4, ry + Math.sin(a2) * 7.4); cx.lineTo(rx + Math.cos(a2) * 12.6, ry + Math.sin(a2) * 12.6); cx.stroke(); }
+      });
+      label(v, rx + 16, "left");
+    }
+  }
+  function verdict() {
+    var p = pace(), el = document.getElementById("verdict");
+    var color = "var(--ok)", msg;
+    if (p === null) { msg = "Too early in the window to estimate PACE. It appears after 30 minutes."; }
+    else if (p >= 100) { color = "var(--crit)"; msg = "PACE ~" + Math.round(p) + "%: at this speed you hit the 5-hour limit before it resets in " + hm(300 - state.elapsed) + ". Ease off or switch to a lighter model."; }
+    else if (p >= 65) { color = "var(--warn)"; msg = "PACE ~" + Math.round(p) + "%: you'll finish the window with little to spare."; }
+    else { msg = "PACE ~" + Math.round(p) + "%: comfortable. You'd end the window with room left."; }
+    el.textContent = msg; el.style.borderLeftColor = color;
+  }
+  function update() {
+    document.getElementById("usedOut").textContent = state.used + "%";
+    document.getElementById("weekOut").textContent = state.week + "%";
+    var e = state.elapsed; document.getElementById("elapsedOut").textContent = Math.floor(e / 60) + "h " + (e % 60) + "m";
+    draw(); verdict();
+  }
+  ["used", "elapsed", "week"].forEach(function (id) {
+    document.getElementById(id).addEventListener("input", function (ev) { state[id] = Number(ev.target.value); update(); });
+  });
+  function seg(attr) {
+    document.querySelectorAll("[data-" + attr + "]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        state[attr] = b.dataset[attr];
+        document.querySelectorAll("[data-" + attr + "]").forEach(function (o) { o.setAttribute("aria-pressed", String(o === b)); });
+        update();
+      });
+    });
+  }
+  seg("design"); seg("mid");
+  if (document.fonts && document.fonts.ready) { document.fonts.ready.then(update); }
+  update();
+})();
+</script>

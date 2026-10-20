@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+"""Run every ai-usage-* collector in parallel; write validated records atomically.
+
+Usage: ai-usage-update [--force] [agent...]
+Output dir: ~/.local/state/omarchy/agents/usage/<id>.json
+Exit 0 if at least one collector succeeded.
+"""
+import json
+import os
+import signal
+import subprocess
+import sys
+from concurrent.futures import ThreadPoolExecutor
+
+BIN = os.path.dirname(os.path.realpath(__file__))
+OUT = os.path.expanduser("~/.local/state/omarchy/agents/usage")
+TIMEOUT = 90
+
+
+def run(name, flags):
+    try:
+        p = subprocess.Popen([os.path.join(BIN, "ai-usage-" + name)] + flags,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             text=True, start_new_session=True)
+    except OSError as e:
+        return name, str(e)
+    try:
+        out, err = p.communicate(timeout=TIMEOUT)
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(p.pid, signal.SIGKILL)
+        except OSError:
+            pass
+        p.communicate()
+        return name, "timeout after %ds" % TIMEOUT
+    if p.returncode != 0:
+        return name, "exit %d: %s" % (p.returncode, err.strip()[-300:])
+    try:
+        rec = json.loads(out)
+        if not isinstance(rec, dict) or rec.get("schemaVersion") != 1:
+            return name, "invalid record"
+    except ValueError as e:
+        return name, "bad JSON: %s" % e
+    rid = os.path.basename(str(rec.get("id") or name))
+    tmp = os.path.join(OUT, ".%s.json.tmp.%d" % (rid, os.getpid()))
+    try:
+        with open(tmp, "w") as f:
+            f.write(json.dumps(rec))
+        os.replace(tmp, os.path.join(OUT, rid + ".json"))
+    except OSError as e:
+        try:
+            os.unlink(tmp)
+        except OSError:
+            pass
+        return name, "write failed: %s" % e
+    return name, None
+
+
+def main():
+    flags = [a for a in sys.argv[1:] if a in ("--force", "--limits-only")]
+    only = [a for a in sys.argv[1:] if not a.startswith("--")]
+    names = sorted(f[len("ai-usage-"):] for f in os.listdir(BIN)
+                   if f.startswith("ai-usage-") and f != "ai-usage-update"
+                   and os.access(os.path.join(BIN, f), os.X_OK))
+    if only:
+        names = [n for n in names if n in only]
+    os.makedirs(OUT, exist_ok=True)
+    ok = 0
+    with ThreadPoolExecutor(max_workers=max(1, len(names))) as ex:
+        for name, err in ex.map(lambda n: run(n, flags), names):
+            if err:
+                print("ai-usage-update: %s failed: %s" % (name, err), file=sys.stderr)
+            else:
+                ok += 1
+    sys.exit(0 if ok else 1)
+
+
+if __name__ == "__main__":
+    main()

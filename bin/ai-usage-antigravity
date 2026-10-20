@@ -1,0 +1,153 @@
+#!/usr/bin/env python3
+"""Antigravity usage collector. Launches agy in a PTY, queries its localhost HTTPS quota RPC, terminates agy."""
+import secrets, json, os, pty, re, signal, ssl, subprocess, sys, time, glob, sqlite3, urllib.request
+from datetime import datetime, timezone, timedelta
+
+HOME = os.path.expanduser("~")
+AGY = os.environ.get("ANTIGRAVITY_CLI_PATH") or os.path.join(HOME, ".local/bin/agy")
+CACHE = os.path.join(HOME, ".cache/ai-usage/antigravity.json")
+PROBE_FLAG = os.path.expanduser("~/.config/ai-usage/antigravity-probe")
+DATA = os.path.join(HOME, ".gemini/antigravity-cli")
+TTL = 300
+BASE = "/exa.language_server_pb.LanguageServerService/"
+BODY = json.dumps({"metadata": {"ideName": "antigravity", "extensionName": "antigravity", "ideVersion": "unknown", "locale": "en"}}).encode()
+
+def now(): return datetime.now(timezone.utc).astimezone()
+
+def descendants(pid):
+    kids = {}
+    for p in glob.glob("/proc/[0-9]*/stat"):
+        try:
+            s = open(p).read(); pp = int(s.rsplit(")", 1)[1].split()[1]); kids.setdefault(pp, []).append(int(p.split("/")[2]))
+        except Exception: pass
+    out, st = {pid}, [pid]
+    while st:
+        for c in kids.get(st.pop(), []):
+            if c not in out: out.add(c); st.append(c)
+    return out
+
+def ports(pid):
+    pids = descendants(pid)
+    try: o = subprocess.run(["ss", "-ltnpH"], capture_output=True, text=True, timeout=5).stdout
+    except Exception: return []
+    res = []
+    for line in o.splitlines():
+        m = re.search(r"127\.0\.0\.1:(\d+)\s", line) or re.search(r"\[::1\]:(\d+)\s", line)
+        pm = {int(x) for x in re.findall(r"pid=(\d+)", line)}
+        if m and pm & pids: res.append(int(m.group(1)))
+    return res
+
+CTX = ssl.create_default_context(); CTX.check_hostname = False; CTX.verify_mode = ssl.CERT_NONE
+
+def SCHEME(port):
+    return "http" if port in HTTP_PORTS else "https"
+HTTP_PORTS = set()
+
+def rpc(port, method, token="", timeout=4):
+    req = urllib.request.Request(f"{SCHEME(port)}://127.0.0.1:{port}{BASE}{method}", data=BODY,
+        headers={"Content-Type": "application/json", "Connect-Protocol-Version": "1", "x-codeium-csrf-token": token})
+    with urllib.request.urlopen(req, context=CTX, timeout=timeout) as r:
+        return json.loads(r.read())
+
+def parse_limits(j):
+    p = j.get("response") or j.get("summary") or j
+    out = []
+    for g in p.get("groups", []):
+        gn = g.get("displayName", "")
+        fam = "Gemini" if "gemini" in gn.lower() else ("Claude/GPT" if ("claude" in gn.lower() or "gpt" in gn.lower()) else gn)
+        for b in g.get("buckets", []):
+            if b.get("disabled"): continue
+            rf = b.get("remainingFraction")
+            if rf is None: rf = (b.get("remaining") or {}).get("value", (b.get("remaining") or {}).get("remainingFraction"))
+            if rf is None: continue
+            bn = (b.get("displayName") or b.get("bucketId") or "").lower()
+            win = "Weekly" if ("week" in bn or "7" in bn) else ("5-hour" if ("5" in bn or "hour" in bn or "session" in bn) else b.get("displayName") or "")
+            out.append({"label": f"{fam} · {win}", "percent": round(min(1, max(0, 1 - float(rf))), 4), "resetsAt": b.get("resetTime")})
+    return out
+
+def auth_applied(t0):
+    try:
+        f = max(glob.glob(os.path.join(DATA, "log", "cli-*.log")), key=os.path.getmtime)
+        if os.path.getmtime(f) < t0 - 2: return False
+        return b"applyAuthResult" in open(f, "rb").read()
+    except Exception: return False
+
+def fetch_limits(deadline=45):
+    master, slave = pty.openpty()
+    import fcntl, termios, struct
+    fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack("HHHH", 50, 160, 0, 0))
+    TOKEN = secrets.token_hex(16)
+    env = dict(os.environ, TERM="xterm-256color", ANTIGRAVITY_CSRF_TOKEN=TOKEN)
+    proc = subprocess.Popen([AGY], stdin=slave, stdout=slave, stderr=slave, cwd=HOME, env=env, start_new_session=True, close_fds=True)
+    os.close(slave); os.set_blocking(master, False)
+    t0 = time.time(); authed = False
+    try:
+        while time.time() - t0 < deadline:
+            try: os.read(master, 65536)
+            except (BlockingIOError, OSError): pass
+            if proc.poll() is not None: raise RuntimeError("agy exited")
+            if not authed and auth_applied(t0): authed = True
+            if not authed and time.time() - t0 > 30: raise RuntimeError("agy auth not applied within 30s")
+            if not authed: time.sleep(0.5); continue
+            for pt in ports(proc.pid):
+                for http in (False, True):
+                    HTTP_PORTS.clear()
+                    if http: HTTP_PORTS.add(pt)
+                    try:
+                        lim = parse_limits(rpc(pt, "RetrieveUserQuotaSummary", TOKEN))
+                        if lim: return lim, "ok"
+                    except Exception: pass
+            time.sleep(1.5)
+        raise RuntimeError("agy quota server not ready")
+    finally:
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+            try: proc.wait(3)
+            except subprocess.TimeoutExpired: os.killpg(proc.pid, signal.SIGKILL)
+        except Exception: pass
+        try: os.close(master)
+        except Exception: pass
+
+def local_stats():
+    today = datetime.now().date()
+    days = {(today - timedelta(days=i)).isoformat(): 0 for i in range(6, -1, -1)}
+    n_conv = n_today = 0
+    try:
+        c = sqlite3.connect("file:" + os.path.join(DATA, "conversation_summaries.db") + "?mode=ro", uri=True)
+        for (t,) in c.execute("select last_modified_time from conversation_summaries"):
+            n_conv += 1
+            if str(t)[:10] == today.isoformat(): n_today += 1
+        return n_conv, n_today, days
+    except Exception: n_conv = 0
+    try:
+        for f in glob.glob(os.path.join(DATA, "conversations", "*")):
+            n_conv += 1
+            if datetime.fromtimestamp(os.path.getmtime(f)).date() == today: n_today += 1
+    except Exception: pass
+    return n_conv, n_today, days
+
+def main():
+    force = "--force" in sys.argv
+    cached = None
+    try: cached = json.load(open(CACHE))
+    except Exception: pass
+    limits, stale, status = [], False, ""
+    # agy 1.4 rejects our CSRF token, so probing costs ~46s for nothing; opt in by touching PROBE_FLAG.
+    if not os.path.exists(PROBE_FLAG):
+        status = "Quota unavailable: agy 1.4 local server rejects CSRF token (probe disabled)"
+    elif cached and not force and time.time() - cached.get("ts", 0) < TTL and cached.get("limits"):
+        limits = cached["limits"]
+    else:
+        try: limits, _ = fetch_limits(); json.dump({"ts": time.time(), "limits": limits}, open(CACHE, "w"))
+        except Exception as e:
+            if cached and cached.get("limits"): limits, stale, status = cached["limits"], True, f"stale: {e}"
+            else: status = f"Quota unavailable: {e}"
+    total, today_n, days = local_stats()
+    rec = {"schemaVersion": 1, "id": "antigravity", "name": "Antigravity", "updatedAt": now().isoformat(timespec="seconds"),
+        "ready": bool(limits), "tierLabel": "", "limits": limits, "limitsStale": stale, "usageStatusText": status,
+        "authHelpText": "Run `agy` and sign in with Google." if not limits else "",
+        "hasLocalStats": False, "todayTotalTokens": 0, "todayPrompts": 0, "todaySessions": today_n,
+        "todayTokensByModel": {}, "recentDays": [{"date": d, "messageCount": v} for d, v in days.items()],
+        "totalPrompts": 0, "totalSessions": total, "activeDays": 0}
+    print(json.dumps(rec))
+main()
